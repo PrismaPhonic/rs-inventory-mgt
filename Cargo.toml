@@ -3,6 +3,18 @@ name = "inventory-mgt"
 version = "0.1.0"
 authors = ["Peter Farr <Peter@PrismaPhonic.com>"]
 edition = "2018"
+description = "inventory-mgt was designed for a very specific use case.  It allows you to update your own inventory csv file with quantities from a supply list csv file"
+keywords = ["inventory", "csv", "parsing"]
+categories = ["command-line-utilities"]
+repository = "https://github.com/PrismaPhonic/rs-inventory-mgt"
+documentation = "https://docs.rs/inventory-mgt"
+readme = "README.md"
+license = "MIT"
+include = [
+    "**/*.rs",
+    "Cargo.toml",
+    "README.md",
+]
 
 [badges]
 travis-ci = { repository = "PrismaPhonic/rs-inventory-mgt", branch = "master" }
