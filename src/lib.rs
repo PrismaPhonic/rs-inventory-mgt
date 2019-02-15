@@ -34,7 +34,7 @@
 //! with updated quantity fields:
 //!
 //! ```terminal
-//! $ inventory-mgt generate
+//! $ inventory_mgt generate
 //! ```
 //!
 //! Make sure you are in the root folder where your `SupplyInventory.csv` and `MasterInventory.csv`
@@ -43,7 +43,7 @@
 //! Optionally you can pass in custom filenames with flags after the `generate` command:
 //!
 //! ```terminal
-//! $ inventory-mgt generate -m masterinv.csv -s supplyinv.csv
+//! $ inventory_mgt generate -m masterinv.csv -s supplyinv.csv
 //! ```
 //!
 //! That's it! Enjoy!

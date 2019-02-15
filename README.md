@@ -38,10 +38,11 @@ $ cargo install inventory-mgt
 ### Use
 
 To use this application, simply run it with the generate command to generate a new master csv
-with updated quantity fields:
+with updated quantity fields. **This must be run in the same folder as your csv
+files!**:
 
 ```terminal
-$ inventory-mgt generate
+$ inventory_mgt generate
 ```
 
 Make sure you are in the root folder where your `SupplyInventory.csv` and `MasterInventory.csv`
@@ -50,7 +51,7 @@ files are. You can grab sample ones from the github repo.
 Optionally you can pass in custom filenames with flags after the `generate` command:
 
 ```terminal
-$ inventory-mgt generate -m masterinv.csv -s supplyinv.csv
+$ inventory_mgt generate -m masterinv.csv -s supplyinv.csv
 ```
 
 That's it! Enjoy!

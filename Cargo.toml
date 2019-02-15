@@ -1,6 +1,6 @@
 [package]
 name = "inventory-mgt"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Peter Farr <Peter@PrismaPhonic.com>"]
 edition = "2018"
 description = "inventory-mgt was designed for a very specific use case.  It allows you to update your own inventory csv file with quantities from a supply list csv file"
