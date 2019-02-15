@@ -4,6 +4,15 @@ version = "0.1.0"
 authors = ["Peter Farr <Peter@PrismaPhonic.com>"]
 edition = "2018"
 
+[badges]
+travis-ci = { repository = "PrismaPhonic/rs-inventory-mgt", branch = "master" }
+maintenance = { status = "actively-developed" }
+
+[[bin]]
+doc = false
+name = "inventory_mgt"
+path = "src/bin/inventory_mgt.rs"
+
 [dependencies]
 structopt = "0.2.14"
 csv = "1.0.5"

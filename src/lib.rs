@@ -5,8 +5,6 @@ extern crate structopt;
 extern crate serde_derive;
 
 use csv;
-use std::io;
-use std::process;
 
 use structopt::StructOpt;
 use std::error::Error;
@@ -33,7 +31,7 @@ pub enum InventoryConfig {
         master_filename: String,
 
         /// specifies the filename for supply inventory csv and defaults to SupplyInventory.csv
-        #[structopt(short = "m", long = "master", default_value = "SupplyInventory.csv")]
+        #[structopt(short = "s", long = "supply", default_value = "SupplyInventory.csv")]
         supply_filename: String,
     },
 }
@@ -42,43 +40,41 @@ pub enum InventoryConfig {
  * CSV Structs
  */
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct MasterPart {
-    pub VenCode: String,
-    pub PartNumber: i32,
-    pub SKU: String,
-    pub TotalQty: i32,
+    pub ven_code: String,
+    pub part_number: String,
+    #[serde(rename = "SKU")]
+    pub sku: String,
+    #[serde(deserialize_with = "csv::invalid_option")]
+    pub total_qty: Option<i32>,
 }
 
 impl MasterPart {
 
-    /// Updates TotalQty with a supplied quantity, mutating the instance in place
+    /// Updates total_qty with a supplied quantity, mutating the instance in place
     pub fn update_qty(&mut self, qty: i32) {
-        self.TotalQty = qty;
+        self.total_qty = Some(qty);
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 struct SupplyPart {
-    VenCode: String,
-    PartNumber: i32,
-    LongDescription: String,
-    JobberPrice: f32,
-    Fedexable: bool,
-    ExeterQty: i32,
-    TotalQty: i32,
-    UpCharge: f32,
-    AAIACode: String,
+    ven_code: String,
+    part_number: String,
+    total_qty: i32,
 }
 
 /**
  * MasterCache & Methods
  */
 
-/// Holds the master inventory in a hashmap, where the key is the VenCode, and the value is a
+/// Holds the master inventory in a hashmap, where the key is the ven_code, and the value is a
 /// MasterPart struct.  This is for efficiency when searching through the master cache.
 pub struct MasterCache {
-    pub products: HashMap<String, MasterPart>
+    pub products: HashMap<String, Vec<MasterPart>>
 }
 
 impl MasterCache {
@@ -87,13 +83,17 @@ impl MasterCache {
     /// a MasterCache struct instance.
     pub fn from(filename: &str) -> Result<MasterCache, Box<dyn Error>> {
         let mut rdr = csv::Reader::from_path(filename)?;
-        let mut products = HashMap::new();
+        let mut products: HashMap<String, Vec<MasterPart>> = HashMap::new();
 
         for result in rdr.deserialize() {
             let product: MasterPart = result?;
-            let ven_code = product.VenCode.clone();
-            
-            products.insert(ven_code, product);
+            let ven_code = product.ven_code.clone();
+
+            if let Some(v_code) = products.get_mut(&ven_code) {
+                v_code.push(product);
+            } else {
+                products.insert(ven_code, vec![product]);
+            }
         }
 
         Ok(MasterCache {
@@ -101,9 +101,17 @@ impl MasterCache {
         })
     }
 
-    pub fn write_csv(&self) -> Result<(), Box<dyn Error>> {
+    /// Writes a new csv file from a MasterCache instance
+    pub fn write_csv(&self, filename: &'static str) -> Result<(), Box<dyn Error>> {
+        let mut wtr = csv::Writer::from_path(filename)?;
 
+        for products in self.products.values() {
+            for product in products {
+                wtr.serialize(product)?;
+            }
+        }
 
+        wtr.flush()?;
         Ok(())
     }
 }
@@ -119,27 +127,34 @@ pub fn run(config: InventoryConfig) -> Result<(), Box<dyn Error>> {
 }
 
 pub fn update_master(master_filename: String, supply_filename: String) -> Result<(), Box<dyn Error>> {
-    let mut master_cache = MasterCache::from(&master_filename)?.products;
+    let mut master_cache = MasterCache::from(&master_filename)?;
     let mut no_ven_codes = HashSet::new();
 
     let mut rdr = csv::Reader::from_path(supply_filename)?;
 
     for result in rdr.deserialize() {
         let product: SupplyPart = result?;
-        let ven_code = &product.VenCode;
-        let product_qty = product.TotalQty;
+        let ven_code = &product.ven_code;
+        let product_qty = product.total_qty;
 
-        // continue looping if we've already seen this ven_code, and it's not in our 
-        // master_cache
+        // continue to next loop iteration if we've already seen this ven_code, 
+        // and it's not in our master_cache
         if no_ven_codes.contains(ven_code) { continue };
         
-        if let Some(master_product) = master_cache.get_mut(ven_code) {
-            master_product.update_qty(product_qty);
+        if let Some(v_code) = master_cache.products.get_mut(ven_code) {
+            
+            // this ven_code is in our master_cache so let's see
+            // if the product is there and update it's quantity
+            if let Some(master_product) = v_code.iter_mut().find(|p| p.part_number == product.part_number) {
+                master_product.update_qty(product_qty);
+            }
         } else {
-            no_ven_codes.insert(ven_code);
+            no_ven_codes.insert(ven_code.clone());
         }
     }
 
+    // lastly let's write the updated master supply list
+    master_cache.write_csv("newmaster.csv")?;
 
     Ok(())
 }

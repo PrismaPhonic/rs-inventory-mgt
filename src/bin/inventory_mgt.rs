@@ -1,6 +1,8 @@
 use std::process;
 extern crate inventory_mgt;
 
+use structopt::StructOpt;
+
 fn main() {
     let config = inventory_mgt::InventoryConfig::from_args();
 
