@@ -8,10 +8,9 @@ use csv;
 
 use structopt::StructOpt;
 use std::error::Error;
+use std::str;
 
 use indexmap::map::IndexMap;
-
-use rayon::prelude::*;
 
 /**
  * Command Line Parsing
@@ -61,19 +60,30 @@ impl MasterPart {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct SupplyPart {
-    ven_code: String,
-    part_number: String,
-    total_qty: i32,
+pub struct MasterPartFast<'a> {
+    pub ven_code: &'a [u8],
+    pub part_number: &'a [u8],
+    #[serde(rename = "SKU")]
+    pub sku: &'a [u8],
+    #[serde(deserialize_with = "csv::invalid_option")]
+    pub total_qty: Option<i32>,
+}
+
+impl<'a> MasterPartFast<'a> {
+
+    /// Updates total_qty with a supplied quantity, mutating the instance in place
+    pub fn update_qty(&mut self, qty: i32) {
+        self.total_qty = Some(qty);
+    }
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct SupplyPartFast<'a> {
-    ven_code: &'a str,
-    part_number: &'a str,
+struct SupplyPart<'a> {
+    ven_code: &'a [u8],
+    part_number: &'a [u8],
     total_qty: i32,
 }
 
@@ -126,27 +136,55 @@ impl MasterCache {
     }
 }
 
+/// Holds the master inventory in a hashmap, where the key is the ven_code, and the value is a
+/// MasterPart struct.  This is for efficiency when searching through the master cache.
+pub struct MasterCacheFast<'a> {
+    pub products: IndexMap<&'a [u8], Vec<MasterPartFast<'a>>>,
+}
+
+impl<'a> MasterCacheFast<'a> {
+    pub fn new() -> MasterCacheFast<'a> {
+        let index_map: IndexMap<&'a [u8], Vec<MasterPartFast<'a>>> = IndexMap::new();
+
+        MasterCacheFast {
+            products: index_map,
+        }
+
+    }
+
+    pub fn push_product(&mut self, ven_code: &'a [u8], product: MasterPartFast<'a>) {
+
+        if let Some(v_code) = self.products.get_mut(ven_code) {
+            v_code.push(product);
+        }
+        
+    }
+}
+
 /// Creates a new master csv file called "newmaster.csv" with the updated quantities, pulled
 /// from the supply csv file
 pub fn update_master(master_filename: String, supply_filename: String) -> Result<(), Box<dyn Error>> {
     let mut master_cache = MasterCache::from(&master_filename)?;
 
     let mut rdr = csv::Reader::from_path(supply_filename)?;
+    let mut raw_record = csv::ByteRecord::new();
+    let headers = rdr.byte_headers()?.clone();
 
-    for result in rdr.deserialize() {
-        let product: SupplyPart = result?;
-        let ven_code = &product.ven_code;
+    while rdr.read_byte_record(&mut raw_record)? {
+        let product: SupplyPart = raw_record.deserialize(Some(&headers))?;
+        let ven_code = product.ven_code;
         let product_qty = product.total_qty;
         
-        if let Some(v_code) = master_cache.products.get_mut(ven_code) {
+        if let Some(v_code) = master_cache.products.get_mut(str::from_utf8(ven_code)?) {
             
             // this ven_code is in our master_cache so let's see
             // if the product is there and update it's quantity
-            if let Some(master_product) = v_code.iter_mut().find(|p| p.part_number == product.part_number) {
+            if let Some(master_product) = v_code.iter_mut().find(|p| p.part_number == str::from_utf8(product.part_number).unwrap()) {
                 master_product.update_qty(product_qty);
             }
         }
     }
+    
 
     // lastly let's write the updated master supply list
     master_cache.write_csv("newmaster.csv")?;
@@ -157,14 +195,29 @@ pub fn update_master(master_filename: String, supply_filename: String) -> Result
 /// Creates a new master csv file called "newmaster.csv" with the updated quantities, pulled
 /// from the supply csv file
 pub fn update_master_fast(master_filename: String, supply_filename: String) -> Result<(), Box<dyn Error>> {
-    let mut master_cache = MasterCache::from(&master_filename)?;
+    let mut master_cache = MasterCacheFast::new();
+
+    let mut rdr = csv::Reader::from_path(master_filename)?;
+    let mut raw_record = csv::ByteRecord::new();
+    let headers = rdr.byte_headers()?.clone();
+
+    while rdr.read_byte_record(&mut raw_record)? {
+        let product: MasterPartFast = raw_record.deserialize(Some(&headers))?;
+        let ven_code = product.ven_code.clone();
+
+        if !master_cache.products.contains_key(ven_code) {
+            master_cache.products.insert(ven_code, vec![product]);
+        } else {
+            master_cache.push_product(ven_code, product);
+        }
+    }
 
     let mut rdr = csv::Reader::from_path(supply_filename)?;
-    let mut raw_record = csv::StringRecord::new();
-    let headers = rdr.headers()?.clone();
+    let mut raw_record = csv::ByteRecord::new();
+    let headers = rdr.byte_headers()?.clone();
 
-    while rdr.read_record(&mut raw_record)? {
-        let product: SupplyPartFast = raw_record.deserialize(Some(&headers))?;
+    while rdr.read_byte_record(&mut raw_record)? {
+        let product: SupplyPart = raw_record.deserialize(Some(&headers))?;
         let ven_code = product.ven_code;
         let product_qty = product.total_qty;
         
@@ -180,7 +233,15 @@ pub fn update_master_fast(master_filename: String, supply_filename: String) -> R
     
 
     // lastly let's write the updated master supply list
-    master_cache.write_csv("newmaster.csv")?;
+    let mut wtr = csv::Writer::from_path("newmaster.csv")?;
+
+    for products in master_cache.products.values() {
+        for product in products {
+            wtr.serialize(product)?;
+        }
+    }
+
+    wtr.flush()?;
 
     Ok(())
 }

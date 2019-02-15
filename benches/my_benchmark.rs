@@ -3,9 +3,16 @@ extern crate criterion;
 
 use criterion::Criterion;
 use inventory_mgt::*;
+use std::process::Command;
 
-fn benchmark_update_owned_string(c: &mut Criterion) {
-    c.bench_function("test reading into owned String", move |b| {
+fn create_command() -> Command {
+    let mut command = Command::new("python3");
+    command.arg("tests/external_process.py");
+    command
+}
+
+fn benchmark_update_rs(c: &mut Criterion) {
+    c.bench_function("test update with rust", move |b| {
         b.iter(|| {
             update_master("MasterInventory.csv".to_string(), "SupplyInventory.csv".to_string()).unwrap();
 
@@ -13,11 +20,11 @@ fn benchmark_update_owned_string(c: &mut Criterion) {
     });
 }
 
-fn benchmark_update_str_ref(c: &mut Criterion) {
-    c.bench_function("test reading into &str", move |b| {
+#[allow(deprecated)]
+fn benchmark_update_py(c: &mut Criterion) {
+    c.bench_function("test update with python", move |b| {
         b.iter(|| {
-            update_master_fast("MasterInventory.csv".to_string(), "SupplyInventory.csv".to_string()).unwrap();
-
+            create_command();
         })
     });
 }
@@ -25,7 +32,7 @@ fn benchmark_update_str_ref(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    benchmark_update_owned_string,
-    benchmark_update_str_ref,
+    benchmark_update_rs,
+    benchmark_update_py,
 );
 criterion_main!(benches);
