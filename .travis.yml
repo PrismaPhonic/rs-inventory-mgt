@@ -8,6 +8,8 @@ matrix:
     - rust: nightly
   fast_finish: true
 cache: cargo
+git:
+  submodules: false
 script:
   - cargo build --verbose --all
   - cargo test --verbose --all
