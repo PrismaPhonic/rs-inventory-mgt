@@ -2,7 +2,7 @@
 [![Build Status](https://travis-ci.org/PrismaPhonic/rs-inventory-mgt.svg?branch=master)](https://travis-ci.org/PrismaPhonic/rs-inventory-mgt)
 [![crates.io](http://meritbadge.herokuapp.com/inventory-mgt)](https://crates.io/crates/inventory-mgt)
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Released API docs](https://docs.rs/birdseed/inventory-mgt.svg)](https://docs.rs/inventory-mgt)
+[![Released API docs](https://docs.rs/inventory-mgt/badge.svg)](https://docs.rs/inventory-mgt)
 
 This crate is a port of an existing python project. It allows one to sync the current
 quantities from a supply inventory csv file to a filtered down view they have created of their
