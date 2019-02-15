@@ -9,7 +9,9 @@ use csv;
 use structopt::StructOpt;
 use std::error::Error;
 
-use std::collections::{HashMap, HashSet};
+use indexmap::map::IndexMap;
+
+use rayon::prelude::*;
 
 /**
  * Command Line Parsing
@@ -67,6 +69,14 @@ struct SupplyPart {
     total_qty: i32,
 }
 
+#[derive(Debug, PartialEq, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct SupplyPartFast<'a> {
+    ven_code: &'a [u8],
+    part_number: &'a [u8],
+    total_qty: i32,
+}
+
 /**
  * MasterCache & Methods
  */
@@ -74,7 +84,7 @@ struct SupplyPart {
 /// Holds the master inventory in a hashmap, where the key is the ven_code, and the value is a
 /// MasterPart struct.  This is for efficiency when searching through the master cache.
 pub struct MasterCache {
-    pub products: HashMap<String, Vec<MasterPart>>
+    pub products: IndexMap<String, Vec<MasterPart>>
 }
 
 impl MasterCache {
@@ -83,7 +93,7 @@ impl MasterCache {
     /// a MasterCache struct instance.
     pub fn from(filename: &str) -> Result<MasterCache, Box<dyn Error>> {
         let mut rdr = csv::Reader::from_path(filename)?;
-        let mut products: HashMap<String, Vec<MasterPart>> = HashMap::new();
+        let mut products: IndexMap<String, Vec<MasterPart>> = IndexMap::new();
 
         for result in rdr.deserialize() {
             let product: MasterPart = result?;
@@ -116,19 +126,10 @@ impl MasterCache {
     }
 }
 
-/// `run` will take in an InventoryConfig enum config (parsed in `main`) and execute the appropriate
-/// program logic
-pub fn run(config: InventoryConfig) -> Result<(), Box<dyn Error>> {
-    match config {
-        InventoryConfig::Generate { master_filename, supply_filename } => update_master(master_filename, supply_filename)?,
-    }
-
-    Ok(())
-}
-
+/// Creates a new master csv file called "newmaster.csv" with the updated quantities, pulled
+/// from the supply csv file
 pub fn update_master(master_filename: String, supply_filename: String) -> Result<(), Box<dyn Error>> {
     let mut master_cache = MasterCache::from(&master_filename)?;
-    let mut no_ven_codes = HashSet::new();
 
     let mut rdr = csv::Reader::from_path(supply_filename)?;
 
@@ -136,10 +137,6 @@ pub fn update_master(master_filename: String, supply_filename: String) -> Result
         let product: SupplyPart = result?;
         let ven_code = &product.ven_code;
         let product_qty = product.total_qty;
-
-        // continue to next loop iteration if we've already seen this ven_code, 
-        // and it's not in our master_cache
-        if no_ven_codes.contains(ven_code) { continue };
         
         if let Some(v_code) = master_cache.products.get_mut(ven_code) {
             
@@ -148,13 +145,53 @@ pub fn update_master(master_filename: String, supply_filename: String) -> Result
             if let Some(master_product) = v_code.iter_mut().find(|p| p.part_number == product.part_number) {
                 master_product.update_qty(product_qty);
             }
-        } else {
-            no_ven_codes.insert(ven_code.clone());
         }
     }
 
     // lastly let's write the updated master supply list
     master_cache.write_csv("newmaster.csv")?;
+
+    Ok(())
+}
+
+// /// Creates a new master csv file called "newmaster.csv" with the updated quantities, pulled
+// /// from the supply csv file
+// pub fn update_master_fast(master_filename: String, supply_filename: String) -> Result<(), Box<dyn Error>> {
+//     let mut master_cache = MasterCache::from(&master_filename)?;
+
+//     let mut rdr = csv::Reader::from_path(supply_filename)?;
+//     let mut raw_record = csv::StringRecord::new();
+//     let headers = rdr.headers()?.clone();
+
+//     while rdr.read_byte_record(&mut raw_record)? {
+//         let product: SupplyPartFast = raw_record.deserialize(Some(&headers))?;
+//         let ven_code = &product.ven_code;
+//         let product_qty = product.total_qty;
+        
+//         if let Some(v_code) = master_cache.products.get_mut(ven_code) {
+            
+//             // this ven_code is in our master_cache so let's see
+//             // if the product is there and update it's quantity
+//             if let Some(master_product) = v_code.iter_mut().find(|p| p.part_number == product.part_number) {
+//                 master_product.update_qty(product_qty);
+//             }
+//         }
+//     }
+    
+
+//     // lastly let's write the updated master supply list
+//     master_cache.write_csv("newmaster.csv")?;
+
+//     Ok(())
+// }
+
+
+/// `run` will take in an InventoryConfig enum config (parsed in `main`) and execute the appropriate
+/// program logic
+pub fn run(config: InventoryConfig) -> Result<(), Box<dyn Error>> {
+    match config {
+        InventoryConfig::Generate { master_filename, supply_filename } => update_master(master_filename, supply_filename)?,
+    }
 
     Ok(())
 }
